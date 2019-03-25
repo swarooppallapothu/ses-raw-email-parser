@@ -33,6 +33,19 @@
             <artifactId>commons-email</artifactId>
             <version>1.5</version>
         </dependency>
+
+<!--        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <scope>5.1.46</scope>
+        </dependency>-->
+
+        <dependency>
+            <groupId>com.mashape.unirest</groupId>
+            <artifactId>unirest-java</artifactId>
+            <version>1.4.9</version>
+        </dependency>
+
     </dependencies>
 
     <build>

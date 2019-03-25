@@ -394,6 +394,10 @@ public class SESEvent implements Serializable {
         private String headersTruncated;
         //String that specifies whether the headers were truncated in the notification, which will happen if the headers are larger than 10 KB. Possible values are true and false.
 
+        private List<String> cc;
+
+        private List<String> bcc;
+
 
         public List<String> getDestination() {
             return destination;
@@ -451,6 +455,21 @@ public class SESEvent implements Serializable {
             this.headersTruncated = headersTruncated;
         }
 
+        public List<String> getCc() {
+            return cc;
+        }
+
+        public void setCc(List<String> cc) {
+            this.cc = cc;
+        }
+
+        public List<String> getBcc() {
+            return bcc;
+        }
+
+        public void setBcc(List<String> bcc) {
+            this.bcc = bcc;
+        }
     }
 
     public static class CommonHeaders {
