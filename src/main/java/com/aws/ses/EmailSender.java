@@ -63,7 +63,8 @@ public class EmailSender {
             // Comment or remove the next line if you are not using a
             // configuration set
 //                    .withConfigurationSetName(CONFIGSET);
-            client.sendEmail(request);
+            SendEmailResult result = client.sendEmail(request);
+            System.out.println(result.getMessageId());
             System.out.println("Email sent!");
         } catch (Exception ex) {
             System.out.println("The email was not sent. Error message: "
