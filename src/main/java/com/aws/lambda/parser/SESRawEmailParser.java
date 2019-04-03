@@ -8,6 +8,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
 import com.amazonaws.util.IOUtils;
 import com.amazonaws.util.StringUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mashape.unirest.http.HttpResponse;
@@ -45,6 +46,33 @@ public class SESRawEmailParser implements RequestStreamHandler {
         S3_CLIENT = AmazonS3ClientBuilder.defaultClient();
         SRC_BKT = "lucroview-net-email-repo";
         TGT_BKT = "lucroview-net-store";
+        uniRestConfiguration();
+    }
+
+    public static void uniRestConfiguration() {
+        try {
+            Unirest.setObjectMapper(new com.mashape.unirest.http.ObjectMapper() {
+                private ObjectMapper jacksonObjectMapper
+                        = new ObjectMapper();
+
+                public <T> T readValue(String value, Class<T> valueType) {
+                    try {
+                        return jacksonObjectMapper.readValue(value, valueType);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                public String writeValue(Object value) {
+                    try {
+                        return jacksonObjectMapper.writeValueAsString(value);
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+        } catch (Exception e) {
+        }
     }
 
     @Override
@@ -90,7 +118,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
                         mailItem.setStrippedHtml(mimeParser.getHtmlContent());
                         mailItem.setAttachmentsCount(mimeParser.hasAttachments() ? mimeParser.getAttachmentList().size() : 0);
 
-                        HttpResponse<JsonNode> postResponse = Unirest.post("https://enpp9tyg024u.x.pipedream.net")
+                        HttpResponse<JsonNode> postResponse = Unirest.post("https://enpp9tyg024u.x.pipedream.net?" + sesMessageId)
                                 .header("accept", "application/json")
                                 .header("Content-Type", "application/json")
                                 .body(mailItem)

@@ -75,7 +75,7 @@ public class MailItem {
 
     private ZonedDateTime mailDate;
 
-    private ZonedDateTime createdDate = ZonedDateTime.now(ZoneId.of("UTC"));
+    private ZonedDateTime createdDate;
 
     private ZonedDateTime seenDate;
 
