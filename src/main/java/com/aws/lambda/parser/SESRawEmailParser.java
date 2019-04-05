@@ -97,7 +97,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
                 String sesMessageId = event.getRecords().get(0).getSES().getMail().getMessageId();
 
                 if (!StringUtils.isNullOrEmpty(sesMessageId)) {
-                    storeRequestStream(new ByteArrayInputStream(requestByteArr), sesMessageId + ".json", context);
+                    storeRequestStream(new ByteArrayInputStream(requestByteArr), sesMessageId + "/" + sesMessageId + ".json", context);
                 } else {
                     throw new Exception("No Message Id genMs: " + genMs);
                 }
