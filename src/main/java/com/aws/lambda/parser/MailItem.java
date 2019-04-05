@@ -1,6 +1,5 @@
 package com.aws.lambda.parser;
 
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Set;
@@ -80,6 +79,8 @@ public class MailItem {
     private ZonedDateTime seenDate;
 
     private ZonedDateTime deletedDate;
+
+    private List<MailItemAttachment> attachments;
 
     /*We should set with sending request*/
     private String recipient;
@@ -360,6 +361,14 @@ public class MailItem {
 
     public void setDeletedDate(ZonedDateTime deletedDate) {
         this.deletedDate = deletedDate;
+    }
+
+    public List<MailItemAttachment> getAttachments() {
+        return attachments;
+    }
+
+    public void setAttachments(List<MailItemAttachment> attachments) {
+        this.attachments = attachments;
     }
 
     public String getRecipient() {

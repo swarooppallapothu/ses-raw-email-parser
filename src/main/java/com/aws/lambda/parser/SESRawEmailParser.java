@@ -21,6 +21,8 @@ import javax.activation.DataSource;
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
@@ -120,12 +122,6 @@ public class SESRawEmailParser implements RequestStreamHandler {
                         mailItem.setStrippedHtml(mimeParser.getHtmlContent());
                         mailItem.setAttachmentsCount(mimeParser.hasAttachments() ? mimeParser.getAttachmentList().size() : 0);
 
-                        HttpResponse<JsonNode> postResponse = Unirest.post("https://enpp9tyg024u.x.pipedream.net?" + sesMessageId)
-                                .header("accept", "application/json")
-                                .header("Content-Type", "application/json")
-                                .body(mailItem)
-                                .asJson();
-
                         logger.log(" MessageID: " + mimeMessageObj.getMessageID() + "\n" +
                                 " To: " + mimeParser.getTo() + "\n" +
                                 " From: " + mimeParser.getFrom() + "\n" +
@@ -133,23 +129,40 @@ public class SESRawEmailParser implements RequestStreamHandler {
                                 " HtmlContent: " + mimeParser.getHtmlContent() + "\n" +
                                 " PlainContent: " + mimeParser.getPlainContent() + "\n" +
                                 " SentDate: " + mimeMessageObj.getSentDate() + "\n" +
-                                " Attachments Counr: " + mimeParser.hasAttachments() + "\n");
+                                " Attachments Count: " + mimeParser.hasAttachments() + "\n");
 
                         if (mimeParser.hasAttachments()) {
-                            List<String> attachments = new ArrayList<>();
+                            List<MailItemAttachment> attachments = new ArrayList<>();
                             for (DataSource ds : mimeParser.getAttachmentList()) {
+                                MailItemAttachment attachment = new MailItemAttachment();
                                 String dstKey = sesMessageId + "/uploads/" + UUID.randomUUID() + "_" + URLEncoder.encode(ds.getName(), "UTF-8");
-                                attachments.add(dstKey);
                                 byte[] bytes = IOUtils.toByteArray(ds.getInputStream());
+
                                 ObjectMetadata metadata = new ObjectMetadata();
                                 metadata.setContentLength(bytes.length);
                                 metadata.setContentType(ds.getContentType());
                                 ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes);
                                 PutObjectRequest putObjectRequest = new PutObjectRequest(TGT_BKT, dstKey, byteArrayInputStream, metadata);
                                 PutObjectResult putObjectResult = S3_CLIENT.putObject(putObjectRequest);
+
+                                attachment.setName(ds.getName());
+                                attachment.setContentType(ds.getContentType());
+                                attachment.setSize((long) bytes.length);
+                                attachment.setFilePath(dstKey);
+                                attachment.setFileUrl(getS3URL() + dstKey);
+                                attachment.setFileType(getFileTypeFromFileName(ds.getName()));
+                                attachments.add(attachment);
                             }
-                            logger.log(String.join("\n", attachments));
+                            mailItem.setAttachments(attachments);
+                            logger.log(String.join("\n", attachments.stream().map(at -> at.getFilePath() + ":" + at.getFileUrl()).collect(Collectors.toList())));
                         }
+
+                        HttpResponse<JsonNode> postResponse = Unirest.post("https://enpp9tyg024u.x.pipedream.net?" + sesMessageId)
+                                .header("accept", "application/json")
+                                .header("Content-Type", "application/json")
+                                .body(mailItem)
+                                .asJson();
+
                     }
                 }
             }
@@ -224,5 +237,24 @@ public class SESRawEmailParser implements RequestStreamHandler {
                 ).orElse(null);
 
         return value;
+    }
+
+    public URL getS3URL() {
+        try {
+            return new URL(String.format("https://%s.s3.amazonaws.com/", TGT_BKT));
+        } catch (MalformedURLException e) {
+            return null;
+        }
+    }
+
+    public String getFileTypeFromFileName(String fileName) {
+        String extension = "";
+        try {
+            String[] fileFrags = fileName.split("\\.");
+            extension = fileFrags[fileFrags.length - 1];
+        } catch (Exception e) {
+
+        }
+        return extension;
     }
 }
