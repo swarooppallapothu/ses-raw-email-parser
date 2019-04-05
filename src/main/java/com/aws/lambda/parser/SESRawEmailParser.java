@@ -17,17 +17,22 @@ import com.mashape.unirest.http.Unirest;
 import org.apache.commons.mail.util.MimeMessageParser;
 import org.apache.http.entity.ContentType;
 
+import javax.activation.DataSource;
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 import java.io.*;
+import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class SESRawEmailParser implements RequestStreamHandler {
 
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES = "X-References";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REPLY_TO = "X-Reply-To";
+    public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO = "Reply-To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_From = "From";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_To = "To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_Sender = "Sender";
@@ -85,10 +90,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
                 requestByteArr = IOUtils.toByteArray(inputStream);
 
                 logger.log("genMs: " + genMs);
-//                logger.log("IOUtils.toByteArray(is).length: " + IOUtils.toByteArray(is).length);
                 String jsonString = isToString(new ByteArrayInputStream(requestByteArr));
-//                logger.log("IOUtils.toByteArray(is).length: " + IOUtils.toByteArray(is).length);
-                logger.log(jsonString);
                 SESEvent event = objectMapper.readValue(jsonString, SESEvent.class);
                 String sesMessageId = event.getRecords().get(0).getSES().getMail().getMessageId();
 
@@ -124,10 +126,6 @@ public class SESRawEmailParser implements RequestStreamHandler {
                                 .body(mailItem)
                                 .asJson();
 
-                        logger.log("Parsed Response: " + "\n" +
-                                objectMapper.writeValueAsString(mailItem));
-
-
                         logger.log(" MessageID: " + mimeMessageObj.getMessageID() + "\n" +
                                 " To: " + mimeParser.getTo() + "\n" +
                                 " From: " + mimeParser.getFrom() + "\n" +
@@ -136,6 +134,22 @@ public class SESRawEmailParser implements RequestStreamHandler {
                                 " PlainContent: " + mimeParser.getPlainContent() + "\n" +
                                 " SentDate: " + mimeMessageObj.getSentDate() + "\n" +
                                 " Attachments Counr: " + mimeParser.hasAttachments() + "\n");
+
+                        if (mimeParser.hasAttachments()) {
+                            List<String> attachments = new ArrayList<>();
+                            for (DataSource ds : mimeParser.getAttachmentList()) {
+                                String dstKey = sesMessageId + "/uploads/" + UUID.randomUUID() + "_" + URLEncoder.encode(ds.getName(), "UTF-8");
+                                attachments.add(dstKey);
+                                byte[] bytes = IOUtils.toByteArray(ds.getInputStream());
+                                ObjectMetadata metadata = new ObjectMetadata();
+                                metadata.setContentLength(bytes.length);
+                                metadata.setContentType(ds.getContentType());
+                                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes);
+                                PutObjectRequest putObjectRequest = new PutObjectRequest(TGT_BKT, dstKey, byteArrayInputStream, metadata);
+                                PutObjectResult putObjectResult = S3_CLIENT.putObject(putObjectRequest);
+                            }
+                            logger.log(String.join("\n", attachments));
+                        }
                     }
                 }
             }
@@ -155,6 +169,9 @@ public class SESRawEmailParser implements RequestStreamHandler {
         mailItem.setMessageId(sesMail.getCommonHeaders().getMessageId());
         mailItem.setReferences(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES));
         mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REPLY_TO));
+        if (StringUtils.isNullOrEmpty(mailItem.getInReplyTo())) {
+            mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO));
+        }
         String sender = getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_Sender);
         if (StringUtils.isNullOrEmpty(sender)) {
             sender = getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_From);
