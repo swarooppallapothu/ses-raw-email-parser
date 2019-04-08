@@ -35,6 +35,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES = "X-References";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REPLY_TO = "X-Reply-To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO = "Reply-To";
+    public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_IN_REPLY_TO = "In-Reply-To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_From = "From";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_To = "To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_Sender = "Sender";
@@ -181,9 +182,12 @@ public class SESRawEmailParser implements RequestStreamHandler {
         MailItem mailItem = new MailItem();
         mailItem.setMessageId(sesMail.getCommonHeaders().getMessageId());
         mailItem.setReferences(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES));
-        mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REPLY_TO));
+        mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_IN_REPLY_TO));
         if (StringUtils.isNullOrEmpty(mailItem.getInReplyTo())) {
-            mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO));
+            mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REPLY_TO));
+            if (StringUtils.isNullOrEmpty(mailItem.getInReplyTo())) {
+                mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO));
+            }
         }
         String sender = getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_Sender);
         if (StringUtils.isNullOrEmpty(sender)) {
