@@ -8,6 +8,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
 import com.amazonaws.util.IOUtils;
 import com.amazonaws.util.StringUtils;
+import com.aws.ApplicationProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +33,8 @@ import java.util.stream.Collectors;
 
 public class SESRawEmailParser implements RequestStreamHandler {
 
-    public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES = "X-References";
+    public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REFERENCES = "X-References";
+    public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES = "References";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REPLY_TO = "X-Reply-To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO = "Reply-To";
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_IN_REPLY_TO = "In-Reply-To";
@@ -45,15 +47,17 @@ public class SESRawEmailParser implements RequestStreamHandler {
     public static final String CONST_AWS_SES_RESPONSE_EMAIL_HEADER_Date = "Date";
     private final static ObjectMapper objectMapper;
     private final static AmazonS3 S3_CLIENT;
-    private final static String SRC_BKT;
-    private final static String TGT_BKT;
+    private final static String EMAILS_BKT;
+    private final static String ATTACHMENTS_BKT;
+    private final static String EMAIL_TRACKER_ENDPOINT;
 
     static {
         objectMapper = new ObjectMapper(); // can reuse, share globally
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         S3_CLIENT = AmazonS3ClientBuilder.defaultClient();
-        SRC_BKT = "lucroview-net-email-repo";
-        TGT_BKT = "lucroview-net-store";
+        EMAILS_BKT = ApplicationProperties.getProperty("s3.bucket.emails_store");
+        ATTACHMENTS_BKT = ApplicationProperties.getProperty("s3.bucket.attachments_store");
+        EMAIL_TRACKER_ENDPOINT = ApplicationProperties.getProperty("tracker.email.endpoint");
         uniRestConfiguration();
     }
 
@@ -92,7 +96,10 @@ public class SESRawEmailParser implements RequestStreamHandler {
             if (inputStream != null) {
                 requestByteArr = IOUtils.toByteArray(inputStream);
 
-                logger.log("genMs: " + genMs);
+                logger.log("genMs: " + genMs + "\n"
+                        + "EMAILS_BKT: " + EMAILS_BKT + "\n"
+                        + "ATTACHMENTS_BKT: " + ATTACHMENTS_BKT + "\n"
+                        + "EMAIL_TRACKER_ENDPOINT: " + EMAIL_TRACKER_ENDPOINT);
                 String jsonString = isToString(new ByteArrayInputStream(requestByteArr));
                 SESEvent event = objectMapper.readValue(jsonString, SESEvent.class);
                 String sesMessageId = event.getRecords().get(0).getSES().getMail().getMessageId();
@@ -107,7 +114,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
 
                 if (!StringUtils.isNullOrEmpty(sesMessageId)) {
                     S3Object s3Object = S3_CLIENT.getObject(new GetObjectRequest(
-                            SRC_BKT, sesMessageId));
+                            EMAILS_BKT, sesMessageId));
                     if (s3Object != null) {
                         InputStream objectData = s3Object.getObjectContent();
 
@@ -143,7 +150,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
                                 metadata.setContentLength(bytes.length);
                                 metadata.setContentType(ds.getContentType());
                                 ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes);
-                                PutObjectRequest putObjectRequest = new PutObjectRequest(TGT_BKT, dstKey, byteArrayInputStream, metadata);
+                                PutObjectRequest putObjectRequest = new PutObjectRequest(ATTACHMENTS_BKT, dstKey, byteArrayInputStream, metadata);
                                 PutObjectResult putObjectResult = S3_CLIENT.putObject(putObjectRequest);
 
                                 attachment.setName(ds.getName());
@@ -158,7 +165,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
                             logger.log(String.join("\n", attachments.stream().map(at -> at.getFilePath() + ":" + at.getFileUrl()).collect(Collectors.toList())));
                         }
 
-                        HttpResponse<JsonNode> postResponse = Unirest.post("https://enpp9tyg024u.x.pipedream.net?" + sesMessageId)
+                        HttpResponse<JsonNode> postResponse = Unirest.post(EMAIL_TRACKER_ENDPOINT)
                                 .header("accept", "application/json")
                                 .header("Content-Type", "application/json")
                                 .body(mailItem)
@@ -189,6 +196,12 @@ public class SESRawEmailParser implements RequestStreamHandler {
                 mailItem.setInReplyTo(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REPLY_TO));
             }
         }
+
+        mailItem.setReferences(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_REFERENCES));
+        if (StringUtils.isNullOrEmpty(mailItem.getReferences())) {
+            mailItem.setReferences(getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_X_REFERENCES));
+        }
+
         String sender = getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_Sender);
         if (StringUtils.isNullOrEmpty(sender)) {
             sender = getHeaderValue(sesMail.getHeaders(), CONST_AWS_SES_RESPONSE_EMAIL_HEADER_From);
@@ -222,7 +235,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
             metadata.setContentLength(is.available());
             metadata.setContentType(ContentType.APPLICATION_JSON.getMimeType());
 
-            PutObjectRequest putObjectRequest = new PutObjectRequest(TGT_BKT, dstKey, is, metadata);
+            PutObjectRequest putObjectRequest = new PutObjectRequest(ATTACHMENTS_BKT, dstKey, is, metadata);
             PutObjectResult putObjectResult = S3_CLIENT.putObject(putObjectRequest);
 
         } catch (Exception e) {
@@ -245,7 +258,7 @@ public class SESRawEmailParser implements RequestStreamHandler {
 
     public URL getS3URL() {
         try {
-            return new URL(String.format("https://%s.s3.amazonaws.com/", TGT_BKT));
+            return new URL(String.format("https://%s.s3.amazonaws.com/", ATTACHMENTS_BKT));
         } catch (MalformedURLException e) {
             return null;
         }
