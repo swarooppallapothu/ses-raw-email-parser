@@ -96,10 +96,6 @@ public class SESRawEmailParser implements RequestStreamHandler {
             if (inputStream != null) {
                 requestByteArr = IOUtils.toByteArray(inputStream);
 
-                logger.log("genMs: " + genMs + "\n"
-                        + "EMAILS_BKT: " + EMAILS_BKT + "\n"
-                        + "ATTACHMENTS_BKT: " + ATTACHMENTS_BKT + "\n"
-                        + "EMAIL_TRACKER_ENDPOINT: " + EMAIL_TRACKER_ENDPOINT);
                 String jsonString = isToString(new ByteArrayInputStream(requestByteArr));
                 SESEvent event = objectMapper.readValue(jsonString, SESEvent.class);
                 String sesMessageId = event.getRecords().get(0).getSES().getMail().getMessageId();
@@ -109,8 +105,6 @@ public class SESRawEmailParser implements RequestStreamHandler {
                 } else {
                     throw new Exception("No Message Id genMs: " + genMs);
                 }
-
-                logger.log(sesMessageId);
 
                 if (!StringUtils.isNullOrEmpty(sesMessageId)) {
                     S3Object s3Object = S3_CLIENT.getObject(new GetObjectRequest(
@@ -129,15 +123,6 @@ public class SESRawEmailParser implements RequestStreamHandler {
                         mailItem.setStrippedText(mimeParser.getPlainContent());
                         mailItem.setStrippedHtml(mimeParser.getHtmlContent());
                         mailItem.setAttachmentsCount(mimeParser.hasAttachments() ? mimeParser.getAttachmentList().size() : 0);
-
-                        logger.log(" MessageID: " + mimeMessageObj.getMessageID() + "\n" +
-                                " To: " + mimeParser.getTo() + "\n" +
-                                " From: " + mimeParser.getFrom() + "\n" +
-                                " Subject: " + mimeParser.getSubject() + "\n" +
-                                " HtmlContent: " + mimeParser.getHtmlContent() + "\n" +
-                                " PlainContent: " + mimeParser.getPlainContent() + "\n" +
-                                " SentDate: " + mimeMessageObj.getSentDate() + "\n" +
-                                " Attachments Count: " + mimeParser.hasAttachments() + "\n");
 
                         if (mimeParser.hasAttachments()) {
                             List<MailItemAttachment> attachments = new ArrayList<>();
@@ -162,7 +147,6 @@ public class SESRawEmailParser implements RequestStreamHandler {
                                 attachments.add(attachment);
                             }
                             mailItem.setAttachments(attachments);
-                            logger.log(String.join("\n", attachments.stream().map(at -> at.getFilePath() + ":" + at.getFileUrl()).collect(Collectors.toList())));
                         }
 
                         HttpResponse<JsonNode> postResponse = Unirest.post(EMAIL_TRACKER_ENDPOINT)
