@@ -1,5 +1,6 @@
 package com.aws.lambda.parser;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
@@ -26,7 +27,7 @@ public class MailItemAttachment {
 
     private String fileType;
 
-    private ZonedDateTime createdDate;
+    private ZonedDateTime createdDate = ZonedDateTime.now(ZoneId.of("UTC"));
 
     private boolean s3Status;
 
